@@ -36,13 +36,16 @@ import (
 	"os"
 
 	"github.com/itsmontoya/gocat"
+	"io"
 )
 
 var (
-	pkgname = flag.String("p", "", "package name to use in output file")
-	prefix  = flag.String("x", "", "prefix to add to all top-level names")
-	notest  = flag.Bool("n", false, "ignore test files")
-	kill    = flag.Bool("k", false, "delete concatenated files from disk")
+	pkgname    = flag.String("p", "", "package name to use in output file")
+	prefix     = flag.String("x", "", "prefix to add to all top-level names")
+	nocomments = flag.Bool("c", false, "ignore comments")
+	notest     = flag.Bool("n", false, "ignore test files")
+	kill       = flag.Bool("k", false, "delete concatenated files from disk")
+	out        = flag.String("o", "", "output file (if empty, stdout will be used")
 )
 
 func die(v ...interface{}) {
@@ -56,7 +59,20 @@ func main() {
 		flag.Usage()
 	}
 
-	if err := gocat.Cat(os.Stdout, *pkgname, *prefix, flag.Args(), *notest, *kill); err != nil {
+	var outW io.Writer
+	if *out == "" {
+		outW = os.Stdout
+	} else {
+		f, err := os.Create(*out)
+		if err != nil {
+			die(err)
+		}
+
+		defer f.Close()
+		outW = f
+	}
+
+	if err := gocat.Cat(outW, *pkgname, *prefix, flag.Args(), *nocomments, *notest, *kill); err != nil {
 		die(err)
 	}
 }

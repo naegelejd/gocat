@@ -31,13 +31,15 @@ import (
 // Cat will cat go files
 // - pkgname is the package name to use in the output file
 // - prefix is the prefix to add to all top-level names
-// - notest will ignore test files
+// - noComments will ignore comments
+// - noTest will ignore test files
 // - kill will delete concatenated files from disk
-func Cat(out io.Writer, pkgname, prefix string, args []string, noTest, kill bool) (err error) {
+func Cat(out io.Writer, pkgname, prefix string, args []string, noComments, noTest, kill bool) (err error) {
+	fmt.Println("Catting!!", noComments)
 	var files map[string]*ast.File
 	fset := token.NewFileSet()
 
-	if files, err = getFiles(fset, args, noTest, kill); err != nil {
+	if files, err = getFiles(fset, args, noComments, noTest, kill); err != nil {
 		return
 	}
 
@@ -159,8 +161,14 @@ func Cat(out io.Writer, pkgname, prefix string, args []string, noTest, kill bool
 
 //
 
-func getFiles(fset *token.FileSet, args []string, noTest, kill bool) (files map[string]*ast.File, err error) {
+func getFiles(fset *token.FileSet, args []string, noComments, noTest, kill bool) (files map[string]*ast.File, err error) {
+	var mode parser.Mode
 	files = make(map[string]*ast.File)
+
+	fmt.Println("No comments", noComments)
+	if !noComments {
+		mode = parser.ParseComments
+	}
 
 	for _, name := range args {
 		if noTest && strings.HasSuffix(name, "_test.go") {
@@ -168,7 +176,7 @@ func getFiles(fset *token.FileSet, args []string, noTest, kill bool) (files map[
 		}
 
 		var f *ast.File
-		if f, err = parser.ParseFile(fset, name, nil, parser.ParseComments); err != nil {
+		if f, err = parser.ParseFile(fset, name, nil, mode); err != nil {
 			return
 		}
 
