@@ -35,7 +35,6 @@ import (
 // - noTest will ignore test files
 // - kill will delete concatenated files from disk
 func Cat(out io.Writer, pkgname, prefix string, args []string, noComments, noTest, kill bool) (err error) {
-	fmt.Println("Catting!!", noComments)
 	var files map[string]*ast.File
 	fset := token.NewFileSet()
 
@@ -165,7 +164,6 @@ func getFiles(fset *token.FileSet, args []string, noComments, noTest, kill bool)
 	var mode parser.Mode
 	files = make(map[string]*ast.File)
 
-	fmt.Println("No comments", noComments)
 	if !noComments {
 		mode = parser.ParseComments
 	}
