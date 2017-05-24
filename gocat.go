@@ -20,6 +20,7 @@ import (
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"io"
 	"os"
 	"path"
 	"sort"
@@ -32,7 +33,7 @@ import (
 // - prefix is the prefix to add to all top-level names
 // - notest will ignore test files
 // - kill will delete concatenated files from disk
-func Cat(pkgname, prefix string, args []string, noTest, kill bool) (err error) {
+func Cat(out io.Writer, pkgname, prefix string, args []string, noTest, kill bool) (err error) {
 	var files map[string]*ast.File
 	fset := token.NewFileSet()
 
@@ -153,7 +154,7 @@ func Cat(pkgname, prefix string, args []string, noTest, kill bool) (err error) {
 		return
 	}
 
-	return format.Node(os.Stdout, fset, f)
+	return format.Node(out, fset, f)
 }
 
 //
