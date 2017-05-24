@@ -5,34 +5,15 @@
 // Originally authored by Russ Cox (https://code.google.com/p/rsc/source/browse/cmd/bundle/main.go)
 //
 // Modified by Joseph Naegele, 2015
+// Modified by Josh Montoya (@itsMontoya), 2017
+//
+// Note: See original comments under cmd/main.go
+// Gocat has been changed to be an importable library. The standalone binary can be found in the cmd dir
 
-// Gocat combines multiple Go source files into a single source file,
-// optionally adding a prefix to all top-level names.
-//
-// Usage:
-//	gocat [-p pkgname] [-x prefix] file_0 [file_n...] >file.go
-//
-// Example
-//
-//	gocat -p acl github.com/naegelejd/go-acl/acl* > acl.go
-//
-// Bugs
-//
-// Gocat has many limitations, most of them not fundamental.
-//
-// It does not work with cgo.
-//
-// It does not work with renamed imports.
-//
-// It does not correctly translate struct literals when prefixing is enabled
-// and a field key in the literal key is the same as a top-level name.
-//
-// It does not work with embedded struct fields.
-package main
+package gocat
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -46,42 +27,17 @@ import (
 	"strings"
 )
 
-var (
-	pkgname = flag.String("p", "", "package name to use in output file")
-	prefix  = flag.String("x", "", "prefix to add to all top-level names")
-	notest  = flag.Bool("n", false, "ignore test files")
-	kill    = flag.Bool("k", false, "delete concatenated files from disk")
-)
-
-func die(v ...interface{}) {
-	fmt.Fprint(os.Stderr, v)
-	os.Exit(1)
-}
-
-func main() {
-	flag.Parse()
-	if flag.NArg() < 1 {
-		flag.Usage()
-	}
-
+// Cat will cat go files
+// - pkgname is the package name to use in the output file
+// - prefix is the prefix to add to all top-level names
+// - notest will ignore test files
+// - kill will delete concatenated files from disk
+func Cat(pkgname, prefix string, args []string, noTest, kill bool) (err error) {
+	var files map[string]*ast.File
 	fset := token.NewFileSet()
-	files := make(map[string]*ast.File)
 
-	for _, name := range flag.Args() {
-		if *notest && strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-
-		f, err := parser.ParseFile(fset, name, nil, parser.ParseComments)
-		if err != nil {
-			die(err)
-		}
-		files[name] = f
-		if *kill {
-			if err := os.Remove(name); err != nil {
-				die(err)
-			}
-		}
+	if files, err = getFiles(fset, args, noTest, kill); err != nil {
+		return
 	}
 
 	var names []string
@@ -93,7 +49,7 @@ func main() {
 	renamed := make(map[*ast.Ident]bool)
 	rename := func(id *ast.Ident) {
 		if !renamed[id] && id != nil && id.Name != "_" && id.Name != "" {
-			id.Name = *prefix + id.Name
+			id.Name = prefix + id.Name
 			renamed[id] = true
 		}
 	}
@@ -136,8 +92,8 @@ func main() {
 		walk(f, func(n interface{}) {
 			kv, ok := n.(*ast.KeyValueExpr)
 			if ok {
-				if id, ok := kv.Key.(*ast.Ident); ok && renamed[id] && isType[id.Name[len(*prefix):]] {
-					id.Name = id.Name[len(*prefix):]
+				if id, ok := kv.Key.(*ast.Ident); ok && renamed[id] && isType[id.Name[len(prefix):]] {
+					id.Name = id.Name[len(prefix):]
 				}
 			}
 			id, ok := n.(*ast.Ident)
@@ -152,8 +108,8 @@ func main() {
 		f := files[name]
 		if i == 0 {
 			f0 = f
-			if *pkgname != "" {
-				f.Name.Name = *pkgname
+			if pkgname != "" {
+				f.Name.Name = pkgname
 			}
 		} else {
 			f.Name = &ast.Ident{Name: "PACKAGE-DELETE-ME"}
@@ -185,7 +141,6 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-
 	for _, name := range names {
 		f := files[name]
 		printer.Fprint(&buf, fset, f)
@@ -193,15 +148,46 @@ func main() {
 
 	data := bytes.Replace(buf.Bytes(), []byte("package PACKAGE-DELETE-ME\n"), nil, -1)
 
-	f, err := parser.ParseFile(fset, "rewritten", data, parser.ParseComments)
-	if err != nil {
-		die(err)
+	var f *ast.File
+	if f, err = parser.ParseFile(fset, "rewritten", data, parser.ParseComments); err != nil {
+		return
 	}
 
-	if err := format.Node(os.Stdout, fset, f); err != nil {
-		die(err)
-	}
+	return format.Node(os.Stdout, fset, f)
 }
+
+//
+
+func getFiles(fset *token.FileSet, args []string, noTest, kill bool) (files map[string]*ast.File, err error) {
+	files = make(map[string]*ast.File)
+
+	for _, name := range args {
+		if noTest && strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+
+		var f *ast.File
+		if f, err = parser.ParseFile(fset, name, nil, parser.ParseComments); err != nil {
+			return
+		}
+
+		// Set file to files map
+		files[name] = f
+
+		if !kill {
+			continue
+		}
+
+		// Kill file
+		if err = os.Remove(name); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+//
 
 // NOTE: Below here stolen from gofix, should probably be in a library eventually.
 
